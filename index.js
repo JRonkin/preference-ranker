@@ -1,61 +1,77 @@
-async function* asyncSortedListGenerator(list, comparator, lazyComparisons = true) {
+function callbackMergeSort(list, comparator, onValue, done) {
+  function resolveValue(value) {
+    try {
+      onValue(value);
+    } catch {}
+  }
+  function resolve() {
+    try {
+      done();
+    } catch {}
+  }
+
   if (list.length < 2) {
-    if (list.length) {
-      yield list[0];
-    }
+    list.forEach(item => resolveValue(item));
+    resolve();
   } else {
-    const [a, b] = [list.slice(0, list.length / 2), list.slice(list.length / 2)]
-      .map(sublist => (async function* () {
-        for (const value of (lazyComparisons ? promisedSort : asyncSortedListGenerator)(sublist, comparator)) {
-          yield await value;
+    const a = [];
+    const b = [];
+    let aDone = false;
+    let bDone = false;
+    let waiting = false;
+
+    function handleValue() {
+      if (!waiting) {
+        if (a.length && b.length) {
+          waiting = true;
+          comparator(a[0], b[0], result => {
+            waiting = false;
+            resolveValue((result > 0 ? b : a).shift());
+            handleValue();
+          });
+        } else {
+          while (bDone && a.length) {
+            resolveValue(a.shift());
+          }
+          while (aDone && b.length) {
+            resolveValue(b.shift());
+          }
+
+          if (aDone && bDone) {
+            resolve();
+          }
         }
-      })());
-
-    let aNext = a.next();
-    let bNext = b.next();
-    let aValue, aDone;
-    let bValue, bDone;
-
-    // TODO if lasyComparisons is false, make Promise chain to finish conparisons before yielding
-    while (([
-      { done: aDone, value: aValue },
-      { done: bDone, value: bValue }
-    ] = await Promise.all([aNext, bNext])) && !aDone && !bDone) {
-      if (await comparator(aValue, bValue) > 0) {
-        bNext = b.next();
-        yield bValue;
-      } else {
-        aNext = a.next();
-        yield aValue;
       }
     }
 
-    for (
-      let gen = aDone ? b : a,
-        value = aDone ? bValue : aValue,
-        done = false;
-      !done;
-      { done, value } = await gen.next()
-    ) {
-      yield value;
-    }
+    callbackMergeSort(
+      list.slice(0, Math.floor(list.length / 2)),
+      comparator,
+      value => {
+        a.push(value);
+        handleValue();
+      },
+      () => {
+        aDone = true;
+        handleValue();
+      }
+    );
+    callbackMergeSort(
+      list.slice(Math.floor(list.length / 2)),
+      comparator,
+      value => {
+        b.push(value);
+        handleValue();
+      },
+      () => {
+        bDone = true;
+        handleValue();
+      }
+    );
   }
 }
 
-function promisedSort(list, comparator) {
-  const generator = asyncSortedListGenerator(list, comparator, false);
-  const sorted = list.length ? [generator.next().then(({ value }) => value)] : [];
 
-  for (let i = 1; i < list.length; i++) {
-    sorted.push(sorted[i - 1].then(() => generator.next().then(({ value }) => value)));
-  }
-
-  return sorted;
-}
-
-async function asyncSort(list, comparator) {
-  return await Promise.all(promisedSort(list, comparator));
-}
 
 const q = document.getElementById('q');
 const add = document.getElementById('add');
@@ -78,16 +94,22 @@ sort.onclick = async () => {
   const values = Array.from(input.children).map(child => child.innerText.replace(/ Remove$/, ''));
 
   const comparisonQueue = [];
-  asyncMergeSort(values, (a, b) => new Promise(resolve => {
-    console.log(`Push: ${a}, ${b}`);
-    comparisonQueue.push({a, b, resolve});
-  })).then(sorted => output.innerHTML = sorted.map(val => `<li>${val}</li>`).join(''));
+  const sorted = [];
 
-  let comparison;
-  while (comparison = await Promise.resolve().then(() => {
+  callbackMergeSort(
+    values,
+    (a, b, resolve) => {
+      console.log(`Push: ${a}, ${b}`);
+      comparisonQueue.push({ a, b, resolve });
+    },
+    value => sorted.push(value),
+    () => output.innerHTML = sorted.map(val => `<li>${val}</li>`).join('')
+  );
+
+  while (comparisonQueue.length) {
     console.log(`Get: ${comparisonQueue.length}`);
-    comparisonQueue.splice(Math.random() * comparisonQueue.length, 1)[0]}
-  )) {
+    const [comparison] = comparisonQueue.splice(Math.random() * comparisonQueue.length, 1);
+
     console.log(`Compare: ${comparison.a}, ${comparison.b}`);
     comparison.resolve(prompt(`A) ${comparison.a}\nB) ${comparison.b}`) == 'B' ? 1 : -1);
   }
