@@ -105,8 +105,15 @@ sort.onclick = async () => {
 
   while (comparisonQueue.length) {
     const [comparison] = comparisonQueue.splice(Math.random() * comparisonQueue.length, 1);
+    const flip = Math.random() < 0.5;
 
-    comparison.resolve(prompt(`A) ${comparison.a}\nB) ${comparison.b}`) == 'B' ? 1 : -1);
+    comparison.resolve(
+      (prompt(`A) ${
+        flip ? comparison.b : comparison.a
+      }\nB) ${
+        flip ? comparison.a : comparison.b
+      }`) == 'B' ? 1 : -1) * (flip ? -1 : 1)
+    );
   }
 }
 
