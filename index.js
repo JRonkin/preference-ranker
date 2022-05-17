@@ -71,8 +71,6 @@ function callbackMergeSort(list, comparator, onValue, done) {
   }
 }
 
-
-
 const q = document.getElementById('q');
 const add = document.getElementById('add');
 const sort = document.getElementById('sort');
@@ -99,7 +97,6 @@ sort.onclick = async () => {
   callbackMergeSort(
     values,
     (a, b, resolve) => {
-      console.log(`Push: ${a}, ${b}`);
       comparisonQueue.push({ a, b, resolve });
     },
     value => sorted.push(value),
@@ -107,10 +104,8 @@ sort.onclick = async () => {
   );
 
   while (comparisonQueue.length) {
-    console.log(`Get: ${comparisonQueue.length}`);
     const [comparison] = comparisonQueue.splice(Math.random() * comparisonQueue.length, 1);
 
-    console.log(`Compare: ${comparison.a}, ${comparison.b}`);
     comparison.resolve(prompt(`A) ${comparison.a}\nB) ${comparison.b}`) == 'B' ? 1 : -1);
   }
 }
